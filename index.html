@@ -1,0 +1,793 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Inventario Materias Primas</title>
+  
+  <!-- Configuración PWA / Pantalla Completa para Android y Samsung -->
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#2563eb">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+
+  <!-- Tailwind CSS & Lucide Icons -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <style>
+    body {
+      user-select: none;
+      -webkit-user-select: none;
+      touch-action: manipulation;
+    }
+    ::-webkit-scrollbar {
+      height: 6px;
+      width: 6px;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #cbd5e1;
+      border-radius: 4px;
+    }
+  </style>
+</head>
+<body class="bg-slate-100 text-slate-800 font-sans min-h-screen flex flex-col">
+
+  <!-- BARRA DE NAVEGACIÓN SUPERIOR -->
+  <header class="bg-white border-b border-slate-200 px-4 py-3 flex items-center justify-between shadow-sm sticky top-0 z-20">
+    <div class="flex items-center space-x-3">
+      <button onclick="exportarCSV()" class="flex items-center space-x-1.5 bg-blue-50 text-blue-600 px-3 py-1.5 rounded-lg font-bold text-sm hover:bg-blue-100 active:scale-95 transition">
+        <i data-lucide="share" class="w-4 h-4"></i>
+        <span>Exportar</span>
+      </button>
+      <h1 id="appTitulo" class="font-bold text-slate-800 text-base md:text-lg">Inventario Materias Primas</h1>
+    </div>
+
+    <div class="flex items-center space-x-2">
+      <!-- Indicador de Pistola USB activa -->
+      <div class="hidden md:flex items-center space-x-1 px-2.5 py-1 bg-emerald-50 text-emerald-700 text-xs font-bold rounded-full border border-emerald-200">
+        <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+        <span>Lector USB Listo</span>
+      </div>
+      <button onclick="abrirModalAjustes()" class="p-2 text-slate-600 hover:bg-slate-100 rounded-lg active:scale-95 transition">
+        <i data-lucide="settings" class="w-5 h-5"></i>
+      </button>
+      <button onclick="confirmarReinicio()" class="p-2 text-red-600 hover:bg-red-50 rounded-lg active:scale-95 transition">
+        <i data-lucide="trash-2" class="w-5 h-5"></i>
+      </button>
+    </div>
+  </header>
+
+  <!-- SELECTOR HORIZONTAL DE ÁREAS -->
+  <nav class="bg-white border-b border-slate-200 px-4 py-2 overflow-x-auto flex space-x-2" id="contenedorAreas"></nav>
+
+  <!-- BARRA DE LÍNEAS / SUBDIVISIONES -->
+  <div id="barraSubUbicacion" class="bg-slate-50 border-b border-slate-200 px-4 py-2 hidden">
+    <div class="flex items-center justify-between mb-1.5">
+      <span class="text-xs font-bold text-slate-500 uppercase tracking-wider">Línea / Sección activa</span>
+      <span class="text-xs bg-blue-100 text-blue-700 font-bold px-2 py-0.5 rounded">Apartado Independiente</span>
+    </div>
+    <div class="flex space-x-2 overflow-x-auto pb-1" id="contenedorLineas"></div>
+  </div>
+
+  <!-- TARJETAS DE RESUMEN DE KILOS -->
+  <section class="p-4 grid grid-cols-2 md:grid-cols-3 gap-3">
+    <div class="bg-white p-3 rounded-xl border border-slate-200 shadow-sm">
+      <div class="text-xs font-bold text-blue-600 uppercase truncate" id="labelResumenSub">Línea Actual</div>
+      <div class="text-xl md:text-2xl font-black text-slate-800 mt-0.5" id="pesoSub">0.0 kg</div>
+    </div>
+    <div class="bg-white p-3 rounded-xl border border-slate-200 shadow-sm">
+      <div class="text-xs font-bold text-slate-500 uppercase truncate" id="labelResumenArea">Total Área</div>
+      <div class="text-xl md:text-2xl font-black text-slate-800 mt-0.5" id="pesoArea">0.0 kg</div>
+    </div>
+    <div class="bg-white p-3 rounded-xl border border-slate-200 shadow-sm col-span-2 md:col-span-1">
+      <div class="text-xs font-bold text-slate-500 uppercase tracking-wider">Total Planta</div>
+      <div class="text-xl md:text-2xl font-black text-blue-600 mt-0.5" id="pesoPlanta">0.0 kg</div>
+    </div>
+  </section>
+
+  <!-- BUSCADOR EN VIVO Y FILTROS RÁPIDOS -->
+  <section class="px-4 space-y-2.5">
+    <div class="relative">
+      <i data-lucide="search" class="w-4 h-4 text-slate-400 absolute left-3 top-3"></i>
+      <input type="text" id="inputBusqueda" oninput="renderizarArticulos()" placeholder="Buscar por nombre o código..." class="w-full bg-white border border-slate-200 pl-9 pr-4 py-2 text-sm rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-sm">
+    </div>
+
+    <div class="flex space-x-2 overflow-x-auto pb-1 text-xs" id="contenedorFiltros">
+      <button onclick="cambiarFiltro('Todos')" class="filtro-chip px-3 py-1.5 rounded-full font-bold border transition bg-blue-600 text-white border-blue-600" data-tipo="Todos">Todos</button>
+      <button onclick="cambiarFiltro('Con Stock')" class="filtro-chip px-3 py-1.5 rounded-full font-bold border border-slate-200 bg-white text-slate-600 transition" data-tipo="Con Stock">Con Stock</button>
+      <button onclick="cambiarFiltro('Pallet')" class="filtro-chip px-3 py-1.5 rounded-full font-bold border border-slate-200 bg-white text-slate-600 transition" data-tipo="Pallet">Pallet</button>
+      <button onclick="cambiarFiltro('Bolsa')" class="filtro-chip px-3 py-1.5 rounded-full font-bold border border-slate-200 bg-white text-slate-600 transition" data-tipo="Bolsa">Bolsa</button>
+      <button onclick="cambiarFiltro('Caja')" class="filtro-chip px-3 py-1.5 rounded-full font-bold border border-slate-200 bg-white text-slate-600 transition" data-tipo="Caja">Caja</button>
+      <button onclick="cambiarFiltro('Tambor')" class="filtro-chip px-3 py-1.5 rounded-full font-bold border border-slate-200 bg-white text-slate-600 transition" data-tipo="Tambor">Tambor</button>
+    </div>
+  </section>
+
+  <!-- LISTA PRINCIPAL DE ARTÍCULOS -->
+  <main class="flex-1 p-4 space-y-3" id="listaArticulos"></main>
+
+  <!-- MODAL DE AJUSTES -->
+  <div id="modalAjustes" class="fixed inset-0 bg-slate-900/60 z-50 flex items-end md:items-center justify-center hidden p-0 md:p-4">
+    <div class="bg-white w-full max-w-2xl rounded-t-2xl md:rounded-2xl max-h-[90vh] flex flex-col shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+      <div class="px-5 py-3.5 border-b border-slate-200 flex items-center justify-between bg-slate-50">
+        <h2 class="font-bold text-slate-800 text-base">Ajustes y Configuración</h2>
+        <button onclick="cerrarModalAjustes()" class="text-slate-500 hover:text-slate-800 font-bold text-sm px-2 py-1">Cerrar</button>
+      </div>
+
+      <div class="flex-1 overflow-y-auto p-5 space-y-6">
+        <!-- 1. TÍTULO APP -->
+        <div>
+          <label class="block text-xs font-bold text-slate-500 uppercase mb-1.5">Nombre del Inventario</label>
+          <input type="text" id="inputTituloConfig" onchange="actualizarTitulo(this.value)" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm font-bold focus:ring-2 focus:ring-blue-500">
+        </div>
+
+        <!-- 2. GESTIÓN DE ÁREAS -->
+        <div class="border-t border-slate-100 pt-5">
+          <label class="block text-xs font-bold text-slate-500 uppercase mb-2">Crear Nueva Área</label>
+          <div class="flex space-x-2 mb-3">
+            <input type="text" id="nuevoNombreArea" placeholder="Ej: Mermas, Silos" class="flex-1 border border-slate-300 rounded-lg px-3 py-1.5 text-sm">
+            <button onclick="crearArea()" class="bg-blue-600 text-white font-bold text-xs px-4 py-2 rounded-lg active:scale-95 transition">Crear Área</button>
+          </div>
+          <div class="space-y-1.5" id="listaAreasConfig"></div>
+        </div>
+
+        <!-- 3. GESTIÓN DE LÍNEAS -->
+        <div class="border-t border-slate-100 pt-5">
+          <label class="block text-xs font-bold text-slate-500 uppercase mb-2">Líneas / Subdivisiones por Área</label>
+          <select id="selectAreaLineas" onchange="renderizarLineasConfig()" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm mb-3 bg-white font-semibold"></select>
+          <div class="flex space-x-2 mb-3">
+            <input type="text" id="nuevoNombreLinea" placeholder="Nueva línea (Ej: LH4, Fila 5)" class="flex-1 border border-slate-300 rounded-lg px-3 py-1.5 text-sm uppercase">
+            <button onclick="crearLinea()" class="bg-slate-800 text-white font-bold text-xs px-4 py-2 rounded-lg active:scale-95 transition">Agregar</button>
+          </div>
+          <div class="space-y-1.5" id="listaLineasConfig"></div>
+        </div>
+
+        <!-- 4. CATÁLOGO DE MATERIALES -->
+        <div class="border-t border-slate-100 pt-5">
+          <div class="flex justify-between items-center mb-3">
+            <label class="text-xs font-bold text-slate-500 uppercase">Catálogo de Materiales</label>
+            <button onclick="abrirModalNuevoMaterial()" class="text-xs text-blue-600 font-bold flex items-center space-x-1">
+              <i data-lucide="plus" class="w-3.5 h-3.5"></i>
+              <span>Nuevo Material</span>
+            </button>
+          </div>
+          <div class="space-y-2" id="listaCatalogoConfig"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- JAVASCRIPT: LÓGICA Y PERSISTENCIA -->
+  <script>
+    // ESTADO GLOBAL
+    let estado = {
+      titulo: "Inventario Materias Primas",
+      areas: [
+        { id: "1", nombre: "Producción", lineas: ["LH1", "LH2", "LH3", "CLT4", "CLT5", "CLA6"] },
+        { id: "2", nombre: "Tapón", lineas: [] },
+        { id: "3", nombre: "Bodega", lineas: ["Fila 1", "Fila 2", "Fila 3", "Fila 4"] }
+      ],
+      areaSeleccionadaId: "1",
+      subSeleccionadaPorArea: { "1": "LH1", "2": "Tapón", "3": "Fila 1" },
+      catalogo: [
+        { id: "m1", codigo: "RMGE00001", nombre: "Material - Caprolactama", pesoUnitario: 25.0, tipo: "Bolsa" },
+        { id: "m2", codigo: "RMGE00007", nombre: "Material - PA6 - Genérico - AZOTY", pesoUnitario: 1200.0, tipo: "Pallet" },
+        { id: "m3", codigo: "RMGE00007", nombre: "Material - PA6 - Genérico - JIANGSU", pesoUnitario: 850.0, tipo: "Pallet" },
+        { id: "m4", codigo: "RMGE00012", nombre: "Material - PA6 - 1030MB", pesoUnitario: 750.0, tipo: "Pallet" },
+        { id: "m5", codigo: "RMGE00024", nombre: "Material - PA6/6.6 - 5034 MTX1", pesoUnitario: 750.0, tipo: "Pallet" },
+        { id: "m6", codigo: "RMGE00056", nombre: "Matiere - PA6/6.6 - H155C1HXI", pesoUnitario: 680.0, tipo: "Pallet" },
+        { id: "m7", codigo: "RMGE00059", nombre: "Matiere - PA6/6.6 - HYG-440", pesoUnitario: 850.0, tipo: "Pallet" }
+      ],
+      registros: [] // { id, catalogoId, codigo, nombre, areaId, subUbicacion, pesoStd, tipo, historial: [{id, fecha, detalle, kilos, ubicacion}] }
+    };
+
+    let filtroActual = "Todos";
+    let bufferCodigoUSB = "";
+    let tiempoUltimaTeclaUSB = 0;
+
+    // INICIALIZACIÓN Y PERSISTENCIA
+    function inicializar() {
+      const guardado = localStorage.getItem("INV_SAMSUNG_DB");
+      if (guardado) {
+        try { estado = JSON.parse(guardado); } catch(e) { console.error(e); }
+      } else {
+        generarRegistrosBase();
+        guardarEnDisco();
+      }
+      document.getElementById("appTitulo").innerText = estado.titulo;
+      document.getElementById("inputTituloConfig").value = estado.titulo;
+      renderizarTodo();
+      configurarLectorUSB();
+      
+      // Registrar Service Worker para soporte Offline
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.register('./sw.js').catch(() => {});
+      }
+    }
+
+    function guardarEnDisco() {
+      localStorage.setItem("INV_SAMSUNG_DB", JSON.stringify(estado));
+    }
+
+    function generarRegistrosBase() {
+      estado.registros = [];
+      estado.areas.forEach(area => {
+        const subs = area.lineas.length > 0 ? area.lineas : [area.nombre];
+        subs.forEach(sub => {
+          estado.catalogo.forEach(mat => {
+            estado.registros.push({
+              id: crypto.randomUUID(),
+              catalogoId: mat.id,
+              codigo: mat.codigo,
+              nombre: mat.nombre,
+              areaId: area.id,
+              subUbicacion: sub,
+              pesoStd: mat.pesoUnitario,
+              tipo: mat.tipo,
+              historial: []
+            });
+          });
+        });
+      });
+    }
+
+    // LISTENER GLOBAL PISTOLA USB
+    function configurarLectorUSB() {
+      window.addEventListener("keydown", (e) => {
+        // Ignorar si el usuario está escribiendo manualmente en un input normal
+        if (e.target.tagName === "INPUT" && e.target.id !== "inputBusqueda") return;
+
+        const ahora = Date.now();
+        if (ahora - tiempoUltimaTeclaUSB > 100) {
+          bufferCodigoUSB = "";
+        }
+        tiempoUltimaTeclaUSB = ahora;
+
+        if (e.key === "Enter") {
+          if (bufferCodigoUSB.trim().length > 0) {
+            procesarDisparoPistola(bufferCodigoUSB.trim());
+            bufferCodigoUSB = "";
+          }
+        } else if (e.key.length === 1) {
+          bufferCodigoUSB += e.key;
+        }
+      });
+    }
+
+    function procesarDisparoPistola(codigoEscaneado) {
+      const area = estado.areas.find(a => a.id === estado.areaSeleccionadaId);
+      const sub = estado.subSeleccionadaPorArea[area.id] || area.nombre;
+      
+      const item = estado.registros.find(r => r.areaId === area.id && r.subUbicacion === sub && r.codigo.toLowerCase() === codigoEscaneado.toLowerCase());
+
+      if (item) {
+        item.historial.push({
+          id: crypto.randomUUID(),
+          fecha: new Date().toISOString(),
+          detalle: `1 ${item.tipo} estándar (Escáner)`,
+          kilos: item.pesoStd,
+          ubicacion: sub
+        });
+        guardarEnDisco();
+        renderizarTodo();
+        navigator.vibrate?.(100);
+      } else {
+        alert(`Código "${codigoEscaneado}" no registrado en ${sub}`);
+      }
+    }
+
+    // RENDERIZADO DE INTERFAZ
+    function renderizarTodo() {
+      renderizarAreas();
+      renderizarLineas();
+      renderizarResumen();
+      renderizarArticulos();
+      lucide.createIcons();
+    }
+
+    function renderizarAreas() {
+      const cont = document.getElementById("contenedorAreas");
+      cont.innerHTML = estado.areas.map(a => {
+        const activo = a.id === estado.areaSeleccionadaId;
+        return `
+          <button onclick="seleccionarArea('${a.id}')" class="px-4 py-2 rounded-xl text-sm font-bold whitespace-nowrap transition active:scale-95 ${activo ? 'bg-blue-600 text-white shadow-sm' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}">
+            ${a.nombre}
+          </button>
+        `;
+      }).join("");
+    }
+
+    function seleccionarArea(id) {
+      estado.areaSeleccionadaId = id;
+      renderizarTodo();
+    }
+
+    function renderizarLineas() {
+      const area = estado.areas.find(a => a.id === estado.areaSeleccionadaId);
+      const barra = document.getElementById("barraSubUbicacion");
+      const cont = document.getElementById("contenedorLineas");
+
+      if (!area || area.lineas.length === 0) {
+        barra.classList.add("hidden");
+        return;
+      }
+
+      barra.classList.remove("hidden");
+      const subActual = estado.subSeleccionadaPorArea[area.id] || area.lineas[0];
+
+      cont.innerHTML = area.lineas.map(l => {
+        const activo = l === subActual;
+        return `
+          <button onclick="seleccionarSubUbicacion('${l}')" class="px-3.5 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap transition active:scale-95 ${activo ? 'bg-blue-600 text-white' : 'bg-white text-slate-700 border border-slate-200'}">
+            ${l}
+          </button>
+        `;
+      }).join("");
+    }
+
+    function seleccionarSubUbicacion(nombre) {
+      estado.subSeleccionadaPorArea[estado.areaSeleccionadaId] = nombre;
+      renderizarTodo();
+    }
+
+    function renderizarResumen() {
+      const area = estado.areas.find(a => a.id === estado.areaSeleccionadaId);
+      const sub = estado.subSeleccionadaPorArea[area.id] || area.nombre;
+
+      let totalSub = 0, totalArea = 0, totalPlanta = 0;
+
+      estado.registros.forEach(r => {
+        const sumaItem = r.historial.reduce((acc, h) => acc + h.kilos, 0);
+        totalPlanta += sumaItem;
+        if (r.areaId === area.id) {
+          totalArea += sumaItem;
+          if (r.subUbicacion === sub) {
+            totalSub += sumaItem;
+          }
+        }
+      });
+
+      document.getElementById("labelResumenSub").innerText = area.lineas.length > 0 ? `Línea ${sub}` : `Área ${area.nombre}`;
+      document.getElementById("pesoSub").innerText = `${totalSub.toFixed(1)} kg`;
+      document.getElementById("labelResumenArea").innerText = `Total ${area.nombre}`;
+      document.getElementById("pesoArea").innerText = `${totalArea.toFixed(1)} kg`;
+      document.getElementById("pesoPlanta").innerText = `${totalPlanta.toFixed(1)} kg`;
+    }
+
+    function cambiarFiltro(tipo) {
+      filtroActual = tipo;
+      document.querySelectorAll(".filtro-chip").forEach(el => {
+        const match = el.getAttribute("data-tipo") === tipo;
+        el.className = `filtro-chip px-3 py-1.5 rounded-full font-bold border transition ${match ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-slate-600 border-slate-200'}`;
+      });
+      renderizarArticulos();
+    }
+
+    function renderizarArticulos() {
+      const cont = document.getElementById("listaArticulos");
+      const area = estado.areas.find(a => a.id === estado.areaSeleccionadaId);
+      const sub = estado.subSeleccionadaPorArea[area.id] || area.nombre;
+      const busqueda = document.getElementById("inputBusqueda").value.toLowerCase().trim();
+
+      let items = estado.registros.filter(r => r.areaId === area.id && r.subUbicacion === sub);
+
+      if (filtroActual === "Con Stock") {
+        items = items.filter(r => r.historial.reduce((a, b) => a + b.kilos, 0) > 0);
+      } else if (filtroActual !== "Todos") {
+        items = items.filter(r => r.tipo.toLowerCase() === filtroActual.toLowerCase());
+      }
+
+      if (busqueda) {
+        items = items.filter(r => r.nombre.toLowerCase().includes(busqueda) || r.codigo.toLowerCase().includes(busqueda));
+      }
+
+      if (items.length === 0) {
+        cont.innerHTML = `
+          <div class="text-center py-12 text-slate-400">
+            <i data-lucide="inbox" class="w-10 h-10 mx-auto mb-2 opacity-60"></i>
+            <p class="font-bold text-sm">No se encontraron materiales</p>
+          </div>
+        `;
+        lucide.createIcons();
+        return;
+      }
+
+      cont.innerHTML = items.map(item => {
+        const pesoTotal = item.historial.reduce((acc, h) => acc + h.kilos, 0);
+        return `
+          <div class="bg-white rounded-xl border border-slate-200 p-3.5 shadow-sm space-y-3">
+            <div class="flex justify-between items-start">
+              <div>
+                <h3 class="font-bold text-slate-800 text-sm md:text-base">${item.nombre}</h3>
+                <p class="text-xs text-slate-400">Cód: ${item.codigo} • Std: ${item.pesoStd} kg/${item.tipo.toLowerCase()}</p>
+              </div>
+              <div class="text-right">
+                <div class="font-black text-blue-600 text-base md:text-lg">${pesoTotal.toFixed(1)} kg</div>
+                <div class="text-[11px] text-slate-400 font-semibold">${item.historial.length} registros</div>
+              </div>
+            </div>
+
+            <hr class="border-slate-100">
+
+            <div class="flex items-center space-x-2">
+              <button onclick="agregarEntrada('${item.id}', 1)" class="flex-1 bg-blue-600 active:bg-blue-700 text-white py-1.5 px-3 rounded-lg text-xs font-bold flex items-center justify-center space-x-1 shadow-sm active:scale-95 transition">
+                <i data-lucide="plus" class="w-3.5 h-3.5"></i>
+                <span>+1 ${item.tipo}</span>
+              </button>
+              <button onclick="ingresoMasivo('${item.id}')" class="bg-slate-100 hover:bg-slate-200 text-slate-700 py-1.5 px-3 rounded-lg text-xs font-bold active:scale-95 transition">
+                + Masivo
+              </button>
+              <button onclick="ingresoKilos('${item.id}')" class="bg-slate-100 hover:bg-slate-200 text-slate-700 py-1.5 px-3 rounded-lg text-xs font-bold active:scale-95 transition">
+                Kg
+              </button>
+              ${item.historial.length > 0 ? `
+                <button onclick="toggleHistorial('${item.id}')" class="text-xs font-bold text-amber-600 bg-amber-50 border border-amber-200 px-2.5 py-1.5 rounded-lg active:scale-95 transition">
+                  Ver (${item.historial.length})
+                </button>
+              ` : ''}
+            </div>
+
+            <div id="historial-${item.id}" class="hidden pt-2 space-y-1.5 border-t border-dashed border-slate-200">
+              ${item.historial.slice().reverse().map(h => `
+                <div class="flex justify-between items-center bg-slate-50 px-2.5 py-1.5 rounded-lg text-xs">
+                  <div>
+                    <span class="font-bold text-slate-700">${h.detalle}</span>
+                    <span class="text-[10px] text-slate-400 ml-1.5">${new Date(h.fecha).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
+                  </div>
+                  <div class="flex items-center space-x-2">
+                    <span class="font-bold text-slate-800">+${h.kilos.toFixed(1)} kg</span>
+                    <button onclick="borrarHistorial('${item.id}', '${h.id}')" class="text-red-500 hover:text-red-700 p-0.5">
+                      <i data-lucide="trash" class="w-3.5 h-3.5"></i>
+                    </button>
+                  </div>
+                </div>
+              `).join("")}
+            </div>
+          </div>
+        `;
+      }).join("");
+      lucide.createIcons();
+    }
+
+    // ACCIONES DE ENTRADA Y PESAJE
+    function agregarEntrada(itemId, cantidad) {
+      const item = estado.registros.find(r => r.id === itemId);
+      item.historial.push({
+        id: crypto.randomUUID(),
+        fecha: new Date().toISOString(),
+        detalle: `${cantidad} ${item.tipo} estándar`,
+        kilos: item.pesoStd * cantidad,
+        ubicacion: item.subUbicacion
+      });
+      guardarEnDisco();
+      renderizarTodo();
+    }
+
+    function ingresoMasivo(itemId) {
+      const item = estado.registros.find(r => r.id === itemId);
+      const cant = prompt(`Ingreso Masivo de ${item.tipo}s (${item.subUbicacion}):`, "10");
+      if (cant && !isNaN(cant) && parseInt(cant) > 0) {
+        agregarEntrada(itemId, parseInt(cant));
+      }
+    }
+
+    function ingresoKilos(itemId) {
+      const item = estado.registros.find(r => r.id === itemId);
+      const kilos = prompt(`Ingresar Kilos exactos (${item.subUbicacion}):`, "45.5");
+      if (kilos && !isNaN(kilos.replace(",", ".")) && parseFloat(kilos.replace(",", ".")) > 0) {
+        item.historial.push({
+          id: crypto.randomUUID(),
+          fecha: new Date().toISOString(),
+          detalle: "Ingreso manual",
+          kilos: parseFloat(kilos.replace(",", ".")),
+          ubicacion: item.subUbicacion
+        });
+        guardarEnDisco();
+        renderizarTodo();
+      }
+    }
+
+    function toggleHistorial(itemId) {
+      const el = document.getElementById(`historial-${itemId}`);
+      el.classList.toggle("hidden");
+    }
+
+    function borrarHistorial(itemId, hId) {
+      const item = estado.registros.find(r => r.id === itemId);
+      item.historial = item.historial.filter(h => h.id !== hId);
+      guardarEnDisco();
+      renderizarTodo();
+    }
+
+    // REINICIO Y EXPORTACIÓN
+    function confirmarReinicio() {
+      if (confirm("¿Reiniciar todo el inventario? Se eliminarán todos los pesajes de todas las áreas.")) {
+        estado.registros.forEach(r => r.historial = []);
+        guardarEnDisco();
+        renderizarTodo();
+      }
+    }
+
+    function exportarCSV() {
+      let csv = "\uFEFFFecha;Hora;Area;Ubicacion;Codigo;Material;Tipo;Detalle;Kilos\n";
+      estado.areas.forEach(a => {
+        const registrosArea = estado.registros.filter(r => r.areaId === a.id);
+        registrosArea.forEach(item => {
+          item.historial.forEach(h => {
+            const d = new Date(h.fecha);
+            const fStr = d.toISOString().split("T")[0];
+            const hStr = d.toTimeString().split(" ")[0];
+            csv += `${fStr};${hStr};${a.nombre};${h.ubicacion};${item.codigo};"${item.nombre}";${item.tipo};"${h.detalle}";${h.kilos.toFixed(2).replace(".", ",")}\n`;
+          });
+        });
+      });
+
+      const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `Inventario_Materias_Primas_${new Date().toISOString().slice(0,10)}.csv`;
+      link.click();
+    }
+
+    // AJUSTES
+    function abrirModalAjustes() {
+      document.getElementById("modalAjustes").classList.remove("hidden");
+      renderizarAreasConfig();
+      renderizarLineasConfig();
+      renderizarCatalogoConfig();
+    }
+
+    function cerrarModalAjustes() {
+      document.getElementById("modalAjustes").classList.add("hidden");
+      renderizarTodo();
+    }
+
+    function actualizarTitulo(val) {
+      estado.titulo = val.trim() || "Inventario Materias Primas";
+      document.getElementById("appTitulo").innerText = estado.titulo;
+      guardarEnDisco();
+    }
+
+    function renderizarAreasConfig() {
+      const cont = document.getElementById("listaAreasConfig");
+      const sel = document.getElementById("selectAreaLineas");
+      
+      cont.innerHTML = estado.areas.map(a => `
+        <div class="flex justify-between items-center bg-slate-50 p-2.5 rounded-lg border border-slate-200">
+          <span class="font-bold text-xs text-slate-700">${a.nombre} (${a.lineas.length} líneas)</span>
+          ${estado.areas.length > 1 ? `
+            <button onclick="borrarArea('${a.id}')" class="text-red-500 hover:text-red-700">
+              <i data-lucide="trash-2" class="w-4 h-4"></i>
+            </button>
+          ` : ''}
+        </div>
+      `).join("");
+
+      sel.innerHTML = estado.areas.map(a => `<option value="${a.id}">${a.nombre}</option>`).join("");
+      lucide.createIcons();
+    }
+
+    function crearArea() {
+      const nombre = document.getElementById("nuevoNombreArea").value.trim();
+      if (!nombre) return;
+      const nueva = { id: crypto.randomUUID(), nombre, lineas: [] };
+      estado.areas.push(nueva);
+      estado.subSeleccionadaPorArea[nueva.id] = nombre;
+      
+      estado.catalogo.forEach(mat => {
+        estado.registros.push({
+          id: crypto.randomUUID(),
+          catalogoId: mat.id,
+          codigo: mat.codigo,
+          nombre: mat.nombre,
+          areaId: nueva.id,
+          subUbicacion: nombre,
+          pesoStd: mat.pesoUnitario,
+          tipo: mat.tipo,
+          historial: []
+        });
+      });
+
+      document.getElementById("nuevoNombreArea").value = "";
+      guardarEnDisco();
+      renderizarAreasConfig();
+      renderizarLineasConfig();
+    }
+
+    function borrarArea(id) {
+      if (estado.areas.length <= 1) return;
+      if (confirm("¿Eliminar esta área y todos sus registros asociados?")) {
+        estado.areas = estado.areas.filter(a => a.id !== id);
+        estado.registros = estado.registros.filter(r => r.areaId !== id);
+        if (estado.areaSeleccionadaId === id) {
+          estado.areaSeleccionadaId = estado.areas[0].id;
+        }
+        guardarEnDisco();
+        renderizarAreasConfig();
+        renderizarLineasConfig();
+      }
+    }
+
+    function renderizarLineasConfig() {
+      const areaId = document.getElementById("selectAreaLineas").value;
+      const area = estado.areas.find(a => a.id === areaId);
+      const cont = document.getElementById("listaLineasConfig");
+
+      if (!area || area.lineas.length === 0) {
+        cont.innerHTML = `<p class="text-xs text-slate-400 italic py-1">Área sin subdivisiones.</p>`;
+        return;
+      }
+
+      cont.innerHTML = area.lineas.map(l => `
+        <div class="flex justify-between items-center bg-slate-50 p-2 rounded-lg border border-slate-200">
+          <span class="font-bold text-xs text-slate-700">${l}</span>
+          <div class="flex space-x-2">
+            <button onclick="renombrarLinea('${area.id}', '${l}')" class="text-blue-500 hover:text-blue-700">
+              <i data-lucide="pencil" class="w-3.5 h-3.5"></i>
+            </button>
+            <button onclick="borrarLinea('${area.id}', '${l}')" class="text-red-500 hover:text-red-700">
+              <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+            </button>
+          </div>
+        </div>
+      `).join("");
+      lucide.createIcons();
+    }
+
+    function crearLinea() {
+      const areaId = document.getElementById("selectAreaLineas").value;
+      const nombre = document.getElementById("nuevoNombreLinea").value.trim().toUpperCase();
+      if (!nombre) return;
+      const area = estado.areas.find(a => a.id === areaId);
+
+      if (!area.lineas.includes(nombre)) {
+        if (area.lineas.length === 0) {
+          estado.registros = estado.registros.filter(r => !(r.areaId === area.id && r.subUbicacion === area.nombre));
+        }
+        area.lineas.push(nombre);
+        estado.subSeleccionadaPorArea[area.id] = nombre;
+
+        estado.catalogo.forEach(mat => {
+          estado.registros.push({
+            id: crypto.randomUUID(),
+            catalogoId: mat.id,
+            codigo: mat.codigo,
+            nombre: mat.nombre,
+            areaId: area.id,
+            subUbicacion: nombre,
+            pesoStd: mat.pesoUnitario,
+            tipo: mat.tipo,
+            historial: []
+          });
+        });
+
+        document.getElementById("nuevoNombreLinea").value = "";
+        guardarEnDisco();
+        renderizarLineasConfig();
+      }
+    }
+
+    function renombrarLinea(areaId, antigua) {
+      const nuevo = prompt(`Nuevo nombre para la línea "${antigua}":`, antigua);
+      if (!nuevo || nuevo.trim().toUpperCase() === antigua) return;
+      const limpio = nuevo.trim().toUpperCase();
+
+      const area = estado.areas.find(a => a.id === areaId);
+      const idx = area.lineas.indexOf(antigua);
+      if (idx !== -1) {
+        area.lineas[idx] = limpio;
+        if (estado.subSeleccionadaPorArea[areaId] === antigua) {
+          estado.subSeleccionadaPorArea[areaId] = limpio;
+        }
+        estado.registros.forEach(r => {
+          if (r.areaId === areaId && r.subUbicacion === antigua) {
+            r.subUbicacion = limpio;
+            r.historial.forEach(h => {
+              if (h.ubicacion === antigua) h.ubicacion = limpio;
+            });
+          }
+        });
+        guardarEnDisco();
+        renderizarLineasConfig();
+      }
+    }
+
+    function borrarLinea(areaId, linea) {
+      if (confirm(`¿Eliminar la línea "${linea}" y sus pesajes?`)) {
+        const area = estado.areas.find(a => a.id === areaId);
+        area.lineas = area.lineas.filter(l => l !== linea);
+        estado.registros = estado.registros.filter(r => !(r.areaId === areaId && r.subUbicacion === linea));
+
+        if (area.lineas.length === 0) {
+          estado.subSeleccionadaPorArea[area.id] = area.nombre;
+          estado.catalogo.forEach(mat => {
+            estado.registros.push({
+              id: crypto.randomUUID(),
+              catalogoId: mat.id,
+              codigo: mat.codigo,
+              nombre: mat.nombre,
+              areaId: area.id,
+              subUbicacion: area.nombre,
+              pesoStd: mat.pesoUnitario,
+              tipo: mat.tipo,
+              historial: []
+            });
+          });
+        } else {
+          estado.subSeleccionadaPorArea[area.id] = area.lineas[0];
+        }
+        guardarEnDisco();
+        renderizarLineasConfig();
+      }
+    }
+
+    function renderizarCatalogoConfig() {
+      const cont = document.getElementById("listaCatalogoConfig");
+      cont.innerHTML = estado.catalogo.map(m => `
+        <div class="flex justify-between items-center bg-slate-50 p-2.5 rounded-lg border border-slate-200">
+          <div>
+            <div class="font-bold text-xs text-slate-800">${m.nombre}</div>
+            <div class="text-[11px] text-slate-400">Cód: ${m.codigo} • ${m.pesoUnitario} kg (${m.tipo})</div>
+          </div>
+          <button onclick="borrarMaterial('${m.id}')" class="text-red-500 hover:text-red-700">
+            <i data-lucide="trash-2" class="w-4 h-4"></i>
+          </button>
+        </div>
+      `).join("");
+      lucide.createIcons();
+    }
+
+    function abrirModalNuevoMaterial() {
+      const codigo = prompt("Código del material (Ej: RMGE00099):");
+      if (!codigo) return;
+      const nombre = prompt("Nombre del material:");
+      if (!nombre) return;
+      const peso = prompt("Peso estándar en kg:", "1000");
+      if (!peso || isNaN(peso.replace(",", "."))) return;
+      const tipo = prompt("Tipo de unidad (Pallet, Bolsa, Caja, Tambor):", "Pallet");
+
+      const nuevo = {
+        id: crypto.randomUUID(),
+        codigo: codigo.trim(),
+        nombre: nombre.trim(),
+        pesoUnitario: parseFloat(peso.replace(",", ".")),
+        tipo: tipo || "Pallet"
+      };
+
+      estado.catalogo.push(nuevo);
+      estado.areas.forEach(area => {
+        const subs = area.lineas.length > 0 ? area.lineas : [area.nombre];
+        subs.forEach(sub => {
+          estado.registros.push({
+            id: crypto.randomUUID(),
+            catalogoId: nuevo.id,
+            codigo: nuevo.codigo,
+            nombre: nuevo.nombre,
+            areaId: area.id,
+            subUbicacion: sub,
+            pesoStd: nuevo.pesoUnitario,
+            tipo: nuevo.tipo,
+            historial: []
+          });
+        });
+      });
+
+      guardarEnDisco();
+      renderizarCatalogoConfig();
+    }
+
+    function borrarMaterial(id) {
+      if (confirm("¿Eliminar este material del catálogo y de todas las áreas?")) {
+        estado.catalogo = estado.catalogo.filter(m => m.id !== id);
+        estado.registros = estado.registros.filter(r => r.catalogoId !== id);
+        guardarEnDisco();
+        renderizarCatalogoConfig();
+      }
+    }
+
+    // Arrancar aplicación
+    window.onload = inicializar;
+  </script>
+</body>
+</html>

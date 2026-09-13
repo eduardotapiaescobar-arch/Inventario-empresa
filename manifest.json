@@ -1,0 +1,17 @@
+{
+  "short_name": "Inventario",
+  "name": "Control Inventario Materias Primas",
+  "icons": [
+    {
+      "src": "https://cdn-icons-png.flaticon.com/512/2897/2897785.png",
+      "type": "image/png",
+      "sizes": "512x512",
+      "purpose": "any maskable"
+    }
+  ],
+  "start_url": "./index.html",
+  "background_color": "#0f172a",
+  "theme_color": "#2563eb",
+  "display": "standalone",
+  "orientation": "landscape-primary"
+}
