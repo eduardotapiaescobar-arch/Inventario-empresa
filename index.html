@@ -146,7 +146,7 @@
         <div class="border-t border-slate-100 pt-5">
           <div class="flex justify-between items-center mb-3">
             <label class="text-xs font-bold text-slate-500 uppercase">Catálogo de Materiales</label>
-            <button onclick="abrirModalNuevoMaterial()" class="text-xs text-blue-600 font-bold flex items-center space-x-1">
+            <button onclick="abrirModalEditorMaterial(null)" class="text-xs bg-blue-50 text-blue-600 hover:bg-blue-100 font-bold px-3 py-1.5 rounded-lg flex items-center space-x-1 transition active:scale-95">
               <i data-lucide="plus" class="w-3.5 h-3.5"></i>
               <span>Nuevo Material</span>
             </button>
@@ -154,6 +154,52 @@
           <div class="space-y-2" id="listaCatalogoConfig"></div>
         </div>
       </div>
+    </div>
+  </div>
+
+  <!-- MODAL SECUNDARIO: CREAR / EDITAR MATERIAL -->
+  <div id="modalEditorMaterial" class="fixed inset-0 bg-slate-900/70 z-[60] flex items-center justify-center hidden p-4">
+    <div class="bg-white w-full max-w-md rounded-2xl shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+      <div class="px-5 py-3.5 border-b border-slate-200 flex items-center justify-between bg-slate-50">
+        <h3 id="tituloModalEditor" class="font-bold text-slate-800 text-sm">Nuevo Material</h3>
+        <button onclick="cerrarModalEditorMaterial()" class="text-slate-400 hover:text-slate-700 text-sm font-bold">✕</button>
+      </div>
+
+      <form onsubmit="guardarMaterial(event)" class="p-5 space-y-4">
+        <input type="hidden" id="editMaterialId">
+
+        <div>
+          <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Código</label>
+          <input type="text" id="editCodigo" required placeholder="Ej: RMGE00099" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm uppercase focus:ring-2 focus:ring-blue-500">
+        </div>
+
+        <div>
+          <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Nombre del Material</label>
+          <input type="text" id="editNombre" required placeholder="Ej: Material - PA66" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500">
+        </div>
+
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Peso Unitario (Kg)</label>
+            <input type="number" step="any" id="editPeso" required placeholder="750" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500">
+          </div>
+          <div>
+            <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Tipo de Empaque</label>
+            <select id="editTipo" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white font-semibold focus:ring-2 focus:ring-blue-500">
+              <option value="Pallet">Pallet</option>
+              <option value="Bolsa">Bolsa</option>
+              <option value="Caja">Caja</option>
+              <option value="Tambor">Tambor</option>
+              <option value="Contenedor">Contenedor</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="pt-2 flex space-x-2">
+          <button type="button" onclick="cerrarModalEditorMaterial()" class="flex-1 bg-slate-100 text-slate-700 font-bold py-2 rounded-lg text-sm hover:bg-slate-200 transition">Cancelar</button>
+          <button type="submit" class="flex-1 bg-blue-600 text-white font-bold py-2 rounded-lg text-sm hover:bg-blue-700 transition active:scale-95 shadow-sm">Guardar</button>
+        </div>
+      </form>
     </div>
   </div>
 
@@ -178,7 +224,7 @@
         { id: "m6", codigo: "RMGE00056", nombre: "Matiere - PA6/6.6 - H155C1HXI", pesoUnitario: 680.0, tipo: "Pallet" },
         { id: "m7", codigo: "RMGE00059", nombre: "Matiere - PA6/6.6 - HYG-440", pesoUnitario: 850.0, tipo: "Pallet" }
       ],
-      registros: [] // { id, catalogoId, codigo, nombre, areaId, subUbicacion, pesoStd, tipo, historial: [{id, fecha, detalle, kilos, ubicacion}] }
+      registros: []
     };
 
     let filtroActual = "Todos";
@@ -199,7 +245,6 @@
       renderizarTodo();
       configurarLectorUSB();
       
-      // Registrar Service Worker para soporte Offline
       if ('serviceWorker' in navigator) {
         navigator.serviceWorker.register('./sw.js').catch(() => {});
       }
@@ -234,7 +279,6 @@
     // LISTENER GLOBAL PISTOLA USB
     function configurarLectorUSB() {
       window.addEventListener("keydown", (e) => {
-        // Ignorar si el usuario está escribiendo manualmente en un input normal
         if (e.target.tagName === "INPUT" && e.target.id !== "inputBusqueda") return;
 
         const ahora = Date.now();
@@ -722,6 +766,7 @@
       }
     }
 
+    // CATÁLOGO: RENDERIZAR, CREAR Y EDITAR
     function renderizarCatalogoConfig() {
       const cont = document.getElementById("listaCatalogoConfig");
       cont.innerHTML = estado.catalogo.map(m => `
@@ -730,51 +775,113 @@
             <div class="font-bold text-xs text-slate-800">${m.nombre}</div>
             <div class="text-[11px] text-slate-400">Cód: ${m.codigo} • ${m.pesoUnitario} kg (${m.tipo})</div>
           </div>
-          <button onclick="borrarMaterial('${m.id}')" class="text-red-500 hover:text-red-700">
-            <i data-lucide="trash-2" class="w-4 h-4"></i>
-          </button>
+          <div class="flex items-center space-x-2">
+            <button onclick="abrirModalEditorMaterial('${m.id}')" class="text-blue-500 hover:text-blue-700 p-1">
+              <i data-lucide="pencil" class="w-4 h-4"></i>
+            </button>
+            <button onclick="borrarMaterial('${m.id}')" class="text-red-500 hover:text-red-700 p-1">
+              <i data-lucide="trash-2" class="w-4 h-4"></i>
+            </button>
+          </div>
         </div>
       `).join("");
       lucide.createIcons();
     }
 
-    function abrirModalNuevoMaterial() {
-      const codigo = prompt("Código del material (Ej: RMGE00099):");
-      if (!codigo) return;
-      const nombre = prompt("Nombre del material:");
-      if (!nombre) return;
-      const peso = prompt("Peso estándar en kg:", "1000");
-      if (!peso || isNaN(peso.replace(",", "."))) return;
-      const tipo = prompt("Tipo de unidad (Pallet, Bolsa, Caja, Tambor):", "Pallet");
+    function abrirModalEditorMaterial(id) {
+      const modal = document.getElementById("modalEditorMaterial");
+      const titulo = document.getElementById("tituloModalEditor");
+      const inputId = document.getElementById("editMaterialId");
+      const inputCod = document.getElementById("editCodigo");
+      const inputNom = document.getElementById("editNombre");
+      const inputPeso = document.getElementById("editPeso");
+      const selectTipo = document.getElementById("editTipo");
 
-      const nuevo = {
-        id: crypto.randomUUID(),
-        codigo: codigo.trim(),
-        nombre: nombre.trim(),
-        pesoUnitario: parseFloat(peso.replace(",", ".")),
-        tipo: tipo || "Pallet"
-      };
+      if (id) {
+        const mat = estado.catalogo.find(m => m.id === id);
+        if (!mat) return;
+        titulo.innerText = "Modificar Material";
+        inputId.value = mat.id;
+        inputCod.value = mat.codigo;
+        inputNom.value = mat.nombre;
+        inputPeso.value = mat.pesoUnitario;
+        selectTipo.value = mat.tipo;
+      } else {
+        titulo.innerText = "Nuevo Material";
+        inputId.value = "";
+        inputCod.value = "";
+        inputNom.value = "";
+        inputPeso.value = "";
+        selectTipo.value = "Pallet";
+      }
 
-      estado.catalogo.push(nuevo);
-      estado.areas.forEach(area => {
-        const subs = area.lineas.length > 0 ? area.lineas : [area.nombre];
-        subs.forEach(sub => {
-          estado.registros.push({
-            id: crypto.randomUUID(),
-            catalogoId: nuevo.id,
-            codigo: nuevo.codigo,
-            nombre: nuevo.nombre,
-            areaId: area.id,
-            subUbicacion: sub,
-            pesoStd: nuevo.pesoUnitario,
-            tipo: nuevo.tipo,
-            historial: []
+      modal.classList.remove("hidden");
+    }
+
+    function cerrarModalEditorMaterial() {
+      document.getElementById("modalEditorMaterial").classList.add("hidden");
+    }
+
+    function guardarMaterial(e) {
+      e.preventDefault();
+      const id = document.getElementById("editMaterialId").value;
+      const codigo = document.getElementById("editCodigo").value.trim().toUpperCase();
+      const nombre = document.getElementById("editNombre").value.trim();
+      const pesoUnitario = parseFloat(document.getElementById("editPeso").value);
+      const tipo = document.getElementById("editTipo").value;
+
+      if (!codigo || !nombre || isNaN(pesoUnitario)) return;
+
+      if (id) {
+        // ACTUALIZAR EXISTENTE
+        const mat = estado.catalogo.find(m => m.id === id);
+        if (mat) {
+          mat.codigo = codigo;
+          mat.nombre = nombre;
+          mat.pesoUnitario = pesoUnitario;
+          mat.tipo = tipo;
+
+          // Propagar cambios a los registros activos en todas las áreas
+          estado.registros.forEach(r => {
+            if (r.catalogoId === id) {
+              r.codigo = codigo;
+              r.nombre = nombre;
+              r.pesoStd = pesoUnitario;
+              r.tipo = tipo;
+            }
+          });
+        }
+      } else {
+        // CREAR NUEVO
+        const nuevo = {
+          id: crypto.randomUUID(),
+          codigo,
+          nombre,
+          pesoUnitario,
+          tipo
+        };
+        estado.catalogo.push(nuevo);
+        estado.areas.forEach(area => {
+          const subs = area.lineas.length > 0 ? area.lineas : [area.nombre];
+          subs.forEach(sub => {
+            estado.registros.push({
+              id: crypto.randomUUID(),
+              catalogoId: nuevo.id,
+              codigo: nuevo.codigo,
+              nombre: nuevo.nombre,
+              areaId: area.id,
+              subUbicacion: sub,
+              pesoStd: nuevo.pesoUnitario,
+              tipo: nuevo.tipo,
+              historial: []
+            });
           });
         });
-      });
+      }
 
       guardarEnDisco();
       renderizarCatalogoConfig();
+      cerrarModalEditorMaterial();
     }
 
     function borrarMaterial(id) {
